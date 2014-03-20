@@ -1,95 +1,73 @@
 import argparse
 import csv
+import getpass
 import os
 import sys
 
 import prettytable
+import requests
 
 import cli
 import client
 import utils
 
 
-class Outputs:
-    TABLE = 'table'
-    CSV = 'csv'
+###
+# Parser
+###
 
-# FIXME: Move sorting up to allow sorting by columns other than key?
-class Groups:
-    HOUR = 'hour'
-    MONTH = 'month'
-    WEEKDAY = 'weekday'
-    USER = 'user'
+OUTPUTS = (
+    "table",
+    "csv"
+)
 
-def get_group_fn(group):
-    return ({
-        Groups.HOUR: utils.bucket_by_hour,
-        Groups.MONTH: utils.bucket_by_month,
-        Groups.WEEKDAY: utils.bucket_by_weekday,
-        Groups.USER: utils.bucket_by_user,
-    }).get(group)
+GROUPS = (
+    "hour",
+    "month",
+    "weekday",
+    "user"
+)
 
-# FIXME: Allow customizing which repos you don't want data on.
-# class Filters:
-#     pass
+AUTH_HELP = "Github auth in the format <user>:<password>"
+GROUP_HELP = "Grouping mode, one of: user, hour, weekday, month. Defaults to user."
+OUTPUT_HELP = "Output format, one of: table, csv. Defaults to table."
+REPO_HELP = "A list of full repository names to query in the format <user|org>/<repo>"
 
-
+def parse_auth(auth_str):
+    auth = tuple(auth_str.split(":", 2))
+    if len(auth) == 2:
+        return auth
+    raise argparse.ArgumentTypeError(AUTH_HELP)
 
 def parse():
     parser = argparse.ArgumentParser()
-    parser.add_argument("auth", help="Github auth, <username>:<password>")
-    parser.add_argument("reponame", help="The reponame, <username>/<repo>",
-                        default="mobify/portal_app")
-    parser.add_argument("-g", "--group",
-                        help="grouping mode <[user]|hour|weekday|month>",
-                        default=Groups.USER)
-    parser.add_argument("-f", "--format", help="output format <[table]|csv>",
-                        default=Outputs.TABLE)
-    options = parser.parse_args()
-    return options
+    parser.add_argument("-a", "--auth", type=parse_auth, default=None, help=AUTH_HELP)
+    parser.add_argument("-g", "--group", default="user", help=GROUP_HELP)
+    parser.add_argument("-f", "--format", default="table", help=OUTPUT_HELP)
+    parser.add_argument("reponames", nargs="*", help=REPO_HELP)
+    return parser.parse_args()
 
 
-def main():
-    options = parse()
+###
+# Output
+###
 
-    username, password = options.auth.split(":", 2)
-    g = client.DiskCacheGitHubClient(username, password)
+def output_csv(columns, buckets):
+    writer = csv.writer(sys.stdout)
+    writer.writerow(columns)
 
-    data = []
-    for reponame in options.reponame.split(","):
-        data.extend(g.pull_requests(reponame))
+    for bucket_key, data in buckets:
+        row = [
+            bucket_key,
+            data["length"],
+            "%2.2f" % (data["merged_same_day_percent"] * 100),
+            int(data["median"].total_seconds()),
+            int(data["average"].total_seconds())
+        ]
+        writer.writerow(row)
 
-
-    pulls = utils.process_pull_request(data)
-
-    bucket_fn = get_group_fn(options.group)
-    buckets = bucket_fn(pulls)
-
-    columns = [
-        options.group.title(),
-        "#",
-        "% Merged Same Day",
-        "Median to Merge",
-        "Average to Merge",
-    ]
-
-    if options.format == Outputs.CSV:
-        writer = csv.writer(sys.stdout)
-        writer.writerow(columns)
-
-        for bucket_key, data in buckets:
-            row = [
-                bucket_key,
-                data["length"],
-                "%2.2f" % (data["merged_same_day_percent"] * 100),
-                int(data["median"].total_seconds()),
-                int(data["average"].total_seconds())
-            ]
-            writer.writerow(row)
-        return
-
-    # The default case, options.format == Output.TABLE
-    table = prettytable.PrettyTable(columns, align="l")
+def output_table(columns, buckets):
+    table = prettytable.PrettyTable(columns)
     table.align = "l"
 
     for bucket_key, data in buckets:
@@ -104,6 +82,70 @@ def main():
 
     print table
 
+
+###
+# Main
+###
+
+def main():
+    options = parse()
+
+    auth = options.auth
+    if auth is None:
+        username = raw_input("GitHub Username: ")
+        password = getpass.getpass("GitHub Password: ")
+        auth = (username, password)
+
+    session = requests.Session()
+    session.auth = auth
+    github = client.DiskCacheGitHubClient(session)
+
+    reponames = options.reponames
+    if not len(reponames):
+        query = raw_input("Query Github by (1) Repo, (2) Organization: ")
+        if query == "1":
+            reponame = raw_input("GitHub Repo: ")
+            reponames = [reponame]
+        else:
+            org = raw_input("Github Organization: ")
+            reponames = [i["full_name"] for i in github.organization_repos(org)]
+
+    data = []
+
+    try:
+        for reponame in reponames:
+            data.extend(github.pull_requests(reponame))
+    except requests.exceptions.HTTPError:
+        print "Error fetching data for %s. Check the reponame and your GitHub " \
+              "credentials and permissions." % (reponame)
+        raise
+
+    pulls = utils.process_pull_request(data)
+
+    if options.group == 'hour':
+        bucket_fn = utils.bucket_by_hour
+    elif options.group == 'weekday':
+        bucket_fn = utils.bucket_by_weekday
+    elif options.group == 'month':
+        bucket_fn = utils.bucket_by_month
+    else:
+        bucket_fn = utils.bucket_by_user
+
+    buckets = bucket_fn(pulls)
+
+    columns = [
+        options.group.title(),
+        "#",
+        "% Merged Same Day",
+        "Median to Merge",
+        "Average to Merge",
+    ]
+
+    if options.format == 'csv':
+        return output_csv(columns, buckets)
+
+    output_table(columns, buckets)
+
+
 if __name__ == '__main__':
     main()
-    sys.exit()

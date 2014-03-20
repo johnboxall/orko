@@ -15,20 +15,18 @@ def process_pull_request(data):
     useable. Mostly:
 
     * Dates to localtimes
-    * Discard duplicate IDs (not sure where they are coming from)
     * Discard unmerged PRs
 
     '''
-    ids = set()
     pulls = []
     for i in data:
         # Skip PRs that are not merged.
         if not i['merged_at']:
             continue
 
-        # Skip PRs that have been seen before.
-        if i['id'] in ids:
-            continue
+        # Skip PRs not done by a specific user.
+        # if i["user"]["login"] not in ['johnboxall']:
+        #     continue
 
         created_at = iso8601_to_local_datetime(i['created_at'])
         merged_at = iso8601_to_local_datetime(i['merged_at'])
@@ -41,14 +39,12 @@ def process_pull_request(data):
         #     continue
 
         # Skip PRs not made on a work day. 6 = Saturday, 7 = Sunday.
-        if created_at.isoweekday() in [6, 7]:
-            continue
+        # if created_at.isoweekday() in [6, 7]:
+        #     continue
 
         # Skip PRs not made within working hours. 6a - 6p.
-        if not (6 < created_at.hour < 18):
-            continue
-
-        ids.add(i['id'])
+        # if not (6 < created_at.hour < 18):
+        #     continue
 
         pull = {
             "created_at": created_at,
@@ -56,8 +52,13 @@ def process_pull_request(data):
             "duration": duration,
             "duration_seconds": duration_seconds,
             "title": i["title"],
-            "user": i["user"]["login"],
         }
+
+        # FIXME: In some cases, PRs don't have Users.
+        try:
+            pull["user"] = i["user"]["login"]
+        except:
+            pull["user"] = "Unknown"
 
         pulls.append(pull)
 
