@@ -7,7 +7,6 @@ import sys
 import prettytable
 import requests
 
-import cli
 import client
 import utils
 
