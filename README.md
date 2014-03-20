@@ -8,14 +8,25 @@
 
 # Orko
 
-A tool
+Orko is a CLI for analysing Pull Request metadata for users and organizations on
+GitHub.
 
 ## Install
 
+    git@github.com:mobify/orko.git
+    cd orko
     make install
 
 ## Usage
 
-Orko grabs Pull Request data from GitHub:
+Orko fetches and analyses Pull Request metadata from GitHub.
 
-    . venv/bin/activate && python orko/orko.py <username>:<password> <reponames>
+    $ . venv/bin/activate && python orko/orko.py
+    GitHub Username: johnboxall
+    GitHub Password:
+    Query Github by (1) Repo, (2) Organization: 2
+    GitHub Organization: mobify
+    +-----------------+-----+-------------------+----------------------+----------------------+
+    | User            | #   | % Merged Same Day | Median to Merge      | Average to Merge     |
+    +-----------------+-----+-------------------+----------------------+----------------------+
+    ...
