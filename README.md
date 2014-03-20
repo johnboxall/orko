@@ -13,7 +13,7 @@ GitHub.
 
 ## Install
 
-    git@github.com:mobify/orko.git
+    git clone git@github.com:mobify/orko.git
     cd orko
     make install
 
