@@ -24,11 +24,12 @@ GROUPS = (
     "hour",
     "month",
     "weekday",
-    "user"
+    "user",
+    "repo"
 )
 
 AUTH_HELP = "Github auth in the format <user>:<password>"
-GROUP_HELP = "Grouping mode, one of: user, hour, weekday, month. Defaults to user."
+GROUP_HELP = "Grouping mode, one of: user, repo, hour, weekday, month. Defaults to user."
 OUTPUT_HELP = "Output format, one of: table, csv. Defaults to table."
 REPO_HELP = "A list of full repository names to query in the format <user|org>/<repo>"
 
@@ -127,6 +128,8 @@ def main():
         bucket_fn = utils.bucket_by_weekday
     elif options.group == 'month':
         bucket_fn = utils.bucket_by_month
+    elif options.group == 'repo':
+        bucket_fn = utils.bucket_by_repo
     else:
         bucket_fn = utils.bucket_by_user
 

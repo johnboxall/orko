@@ -47,11 +47,12 @@ def process_pull_request(data):
         #     continue
 
         pull = {
+            "repo": i["base"]["repo"]["full_name"],
+            "title": i["title"],
             "created_at": created_at,
             "merged_at": merged_at,
             "duration": duration,
-            "duration_seconds": duration_seconds,
-            "title": i["title"],
+            "duration_seconds": duration_seconds
         }
 
         # FIXME: In some cases, PRs don't have Users.
@@ -107,6 +108,11 @@ def bucket(pulls, bucket_key_fn):
         bucket_key = bucket_key_fn(pull)
         buckets[bucket_key].append(pull)
     return {bucket_key: interesting(pulls) for bucket_key, pulls in buckets.items()}
+
+def bucket_by_repo(pulls):
+    buckets = bucket(pulls, lambda pull: pull["repo"])
+    sorted_buckets = sorted(buckets.iteritems(), key=lambda t: t[1]["length"])
+    return sorted_buckets
 
 def bucket_by_user(pulls):
     buckets = bucket(pulls, lambda pull: pull["user"])
