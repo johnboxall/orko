@@ -1,10 +1,13 @@
 import hashlib
+import importlib
 import itertools
 import json
 import os
 
+import requests
 
-class GitHubClient(object):
+
+class Client(object):
     '''
     Simple GitHub client. Pass in a `requests.Session` with basic auth or use
     OAuth.
@@ -67,7 +70,6 @@ class GitHubClient(object):
         '''
         return self.paged_request('user/%s/repos' % username)
 
-
     def organization_repos(self, org):
         '''
         Returns a list of repos for the organization, `org`.
@@ -89,7 +91,7 @@ class GitHubClient(object):
         return self.paged_request('repos/%s/pulls' % reponame, params=params)
 
 
-class DiskCacheGitHubClient(GitHubClient):
+class DiskCacheClient(Client):
     '''
     A GitHub client that caches responses to disk.
 
@@ -100,10 +102,10 @@ class DiskCacheGitHubClient(GitHubClient):
         if not os.path.isdir(self.cache_dir):
             os.mkdir(self.cache_dir)
 
-        super(DiskCacheGitHubClient, self).__init__(session)
+        super(DiskCacheClient, self).__init__(session)
 
     def request(self, path, params=None, method='GET', headers=None):
-        seed = path + '|' + '|'.join((params or {}).values())
+        seed = path + ':' + ':'.join((params or {}).values())
         cache_key = hashlib.md5(seed).hexdigest()
 
         filename = os.path.join(self.cache_dir, cache_key)
@@ -111,7 +113,33 @@ class DiskCacheGitHubClient(GitHubClient):
         if os.path.isfile(filename):
             return json.loads(open(filename).read())
 
-        data = super(DiskCacheGitHubClient, self).request(path, params, method, headers)
+        data = super(DiskCacheClient, self).request(path, params, method, headers)
         with open(filename, "w") as f:
             f.write(json.dumps(data))
         return data
+
+
+def get_client_class(class_path):
+    try:
+        modulepath, classname = class_path.rsplit('.', 1)
+    except (KeyError, ValueError):
+        raise
+
+    try:
+        module = importlib.import_module(modulepath)
+        return getattr(module, classname)
+    except (ImportError, AttributeError):
+        raise
+
+def get_client(auth=None, client_class=None):
+    if client_class is None:
+        client_class = Client
+    else:
+        client_class = get_client_class(client_class)
+
+    session = requests.Session()
+    if auth is not None:
+        session.auth = auth
+
+    client = client_class(session)
+    return client

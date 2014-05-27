@@ -3,4 +3,3 @@ prettytable==0.7.2
 pytz==2013.9
 requests==2.2.1
 tzlocal==1.1.1
-wsgiref==0.1.2
